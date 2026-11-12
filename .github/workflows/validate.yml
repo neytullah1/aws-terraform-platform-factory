@@ -1,0 +1,32 @@
+name: IaC validation
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4 # production: SHA-pin
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3 # production: SHA-pin
+        with:
+          terraform_version: '1.9.8'
+      - name: Formatting
+        run: terraform fmt -check -recursive
+      - name: Validate isolated roots
+        run: |
+          set -euo pipefail
+          for dir in modules/ecr modules/network compositions/container-foundation live/product-a/nonprod; do
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+          done
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Security enforcement disclaimer
+        run: |
+          echo 'This workflow does not replace security-owned plan policies, mandatory checks, or Scalr enforcement.'
+          echo 'Production: integrate Checkov/tfsec and signed OPA policies from security-owned sources.'
